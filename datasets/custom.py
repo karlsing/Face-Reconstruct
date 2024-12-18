@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
 from Register import Registers
-from datasets.base import ImagePathDataset
+from datasets.base import ImagePathDataset, ImageNPZDataset
 from datasets.utils import get_image_paths_from_dir
 from PIL import Image
 import cv2
@@ -35,16 +35,28 @@ class CustomAlignedDataset(Dataset):
     def __init__(self, dataset_config, stage='train'):
         super().__init__()
         self.image_size = (dataset_config.image_size, dataset_config.image_size)
-        image_paths_ori = get_image_paths_from_dir(os.path.join(dataset_config.dataset_path, f'{stage}/B'))
-        image_paths_cond = get_image_paths_from_dir(os.path.join(dataset_config.dataset_path, f'{stage}/A'))
         self.flip = dataset_config.flip if stage == 'train' else False
         self.to_normal = dataset_config.to_normal
-
-        self.imgs_ori = ImagePathDataset(image_paths_ori, self.image_size, flip=self.flip, to_normal=self.to_normal)
-        self.imgs_cond = ImagePathDataset(image_paths_cond, self.image_size, flip=self.flip, to_normal=self.to_normal)
+        
+        path_config = getattr(dataset_config.dataset_path, stage)
+        
+        if path_config.cond.use_npz:
+            self.imgs_cond = ImageNPZDataset(path_config.cond.path, self.image_size, flip=self.flip, to_normal=self.to_normal)
+        else:
+            image_paths_cond = get_image_paths_from_dir(path_config.cond.path)
+            self.imgs_cond = ImagePathDataset(image_paths_cond, self.image_size, flip=self.flip, to_normal=self.to_normal)
+        if stage == 'test':
+            self.imgs_ori = self.imgs_cond
+        else:
+            if path_config.ori.use_npz:
+                self.imgs_ori = ImageNPZDataset(path_config.ori.path, self.image_size, flip=self.flip, to_normal=self.to_normal)
+            else:
+                image_paths_ori = get_image_paths_from_dir(path_config.ori.path)
+                self.imgs_ori = ImagePathDataset(image_paths_ori, self.image_size, flip=self.flip, to_normal=self.to_normal)
+        
 
     def __len__(self):
-        return len(self.imgs_ori)
+        return min(len(self.imgs_cond), len(self.imgs_ori))
 
     def __getitem__(self, i):
         return self.imgs_ori[i], self.imgs_cond[i]

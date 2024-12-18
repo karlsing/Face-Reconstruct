@@ -57,9 +57,11 @@ def get_optimizer(optim_config, parameters):
         return NotImplementedError('Optimizer {} not understood.'.format(optim_config.optimizer))
 
 
-def get_dataset(data_config):
-    train_dataset = Registers.datasets[data_config.dataset_type](data_config.dataset_config, stage='train')
-    val_dataset = Registers.datasets[data_config.dataset_type](data_config.dataset_config, stage='val')
+def get_dataset(data_config, test=False):
+    train_dataset = val_dataset = None
+    if not test:
+        train_dataset = Registers.datasets[data_config.dataset_type](data_config.dataset_config, stage='train')
+        val_dataset = Registers.datasets[data_config.dataset_type](data_config.dataset_config, stage='val')
     test_dataset = Registers.datasets[data_config.dataset_type](data_config.dataset_config, stage='test')
     return train_dataset, val_dataset, test_dataset
 

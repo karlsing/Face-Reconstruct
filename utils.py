@@ -42,5 +42,5 @@ def instantiate_from_config(config):
 
 
 def get_runner(runner_name, config):
-    runner = Registers.runners[runner_name](config)
+    runner: BBDMRunner = Registers.runners[runner_name](config)
     return runner

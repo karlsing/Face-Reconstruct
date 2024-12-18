@@ -1,3 +1,4 @@
+from typing import Union
 import os
 
 import torch.optim.lr_scheduler
@@ -161,12 +162,12 @@ class BBDMRunner(DiffusionBaseRunner):
         self.logger(self.net.cond_latent_mean)
         self.logger(self.net.cond_latent_std)
 
-    def loss_fn(self, net, batch, epoch, step, opt_idx=0, stage='train', write=True):
+    def loss_fn(self, net: BrownianBridgeModel, batch, epoch, step, opt_idx=0, stage='train', write=True):
         (x, x_name), (x_cond, x_cond_name) = batch
         x = x.to(self.config.training.device[0])
         x_cond = x_cond.to(self.config.training.device[0])
 
-        loss, additional_info = net(x, x_cond)
+        loss, additional_info = net.forward(x, x_cond)
         if write and self.is_main_process:
             self.writer.add_scalar(f'loss/{stage}', loss, step)
             if additional_info.__contains__('recloss_noise'):
@@ -176,7 +177,7 @@ class BBDMRunner(DiffusionBaseRunner):
         return loss
 
     @torch.no_grad()
-    def sample(self, net, batch, sample_path, stage='train'):
+    def sample(self, net: Union[BrownianBridgeModel, LatentBrownianBridgeModel], batch, sample_path, stage='train'):
         sample_path = make_dir(os.path.join(sample_path, f'{stage}_sample'))
         reverse_sample_path = make_dir(os.path.join(sample_path, 'reverse_sample'))
         reverse_one_step_path = make_dir(os.path.join(sample_path, 'reverse_one_step_samples'))
@@ -222,7 +223,7 @@ class BBDMRunner(DiffusionBaseRunner):
             self.writer.add_image(f'{stage}_ground_truth', image_grid, self.global_step, dataformats='HWC')
 
     @torch.no_grad()
-    def sample_to_eval(self, net, test_loader, sample_path):
+    def sample_to_eval(self, net: Union[BrownianBridgeModel, LatentBrownianBridgeModel], test_loader, sample_path):
         condition_path = make_dir(os.path.join(sample_path, f'condition'))
         gt_path = make_dir(os.path.join(sample_path, 'ground_truth'))
         result_path = make_dir(os.path.join(sample_path, str(self.config.model.BB.params.sample_step)))

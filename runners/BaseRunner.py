@@ -21,10 +21,11 @@ from tqdm.autonotebook import tqdm
 from runners.base.EMA import EMA
 from runners.utils import make_save_dirs, make_dir, get_dataset, remove_file
 
+from model.BrownianBridge.BrownianBridgeModel import BrownianBridgeModel
 
 class BaseRunner(ABC):
     def __init__(self, config):
-        self.net = None  # Neural Network
+        self.net: BrownianBridgeModel = None  # Neural Network
         self.optimizer = None  # optimizer
         self.scheduler = None  # scheduler
         self.config = config  # config from configuration file
@@ -286,7 +287,7 @@ class BaseRunner(ABC):
         pass
 
     @abstractmethod
-    def loss_fn(self, net, batch, epoch, step, opt_idx=0, stage='train', write=True):
+    def loss_fn(self, net: BrownianBridgeModel, batch, epoch, step, opt_idx=0, stage='train', write=True):
         """
         loss function
         :param net: nn.Module
@@ -356,11 +357,6 @@ class BaseRunner(ABC):
                                     num_workers=8,
                                     drop_last=True,
                                     sampler=val_sampler)
-            test_loader = DataLoader(test_dataset,
-                                     batch_size=self.config.data.test.batch_size,
-                                     num_workers=8,
-                                     drop_last=True,
-                                     sampler=test_sampler)
         else:
             train_loader = DataLoader(train_dataset,
                                       batch_size=self.config.data.train.batch_size,
@@ -372,11 +368,6 @@ class BaseRunner(ABC):
                                     shuffle=self.config.data.val.shuffle,
                                     num_workers=8,
                                     drop_last=True)
-            test_loader = DataLoader(test_dataset,
-                                     batch_size=self.config.data.test.batch_size,
-                                     shuffle=False,
-                                     num_workers=8,
-                                     drop_last=True)
 
         epoch_length = len(train_loader)
         start_epoch = self.global_epoch
@@ -555,7 +546,7 @@ class BaseRunner(ABC):
 
     @torch.no_grad()
     def test(self):
-        train_dataset, val_dataset, test_dataset = get_dataset(self.config.data)
+        train_dataset, val_dataset, test_dataset = get_dataset(self.config.data, True)
         if test_dataset is None:
             test_dataset = val_dataset
         # test_dataset = val_dataset

@@ -95,7 +95,7 @@ class BrownianBridgeModel(nn.Module):
         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
         return self.p_losses(x, y, context, t)
 
-    def p_losses(self, x0, y, context, t, noise=None):
+    def p_losses(self, x0: torch.FloatTensor, y: torch.FloatTensor, context, t: torch.IntTensor, noise: torch.Tensor=None):
         """
         model loss
         :param x0: encoded x_ori, E(x_ori) = x0

@@ -10,25 +10,46 @@ training:
 
 testing:
   clip_denoised: True
-  sample_num: 5
+  sample_num: 4
 
 data:
   dataset_name: 'dataset_name'
   dataset_type: 'custom_aligned'
   dataset_config:
-    dataset_path: 'dataset_path'
-    image_size: 256
+    dataset_path: 
+      train: 
+        ori:
+          path: 'data/ffhq.npz'
+          use_npz: True
+        cond:
+          path: 'data/similar_images'
+          use_npz: False
+      val: 
+        ori:
+          path: 'data/ffhq.npz'
+          use_npz: True
+        cond:
+          path: 'data/similar_images'
+          use_npz: False
+      test: 
+        ori:
+          path: 'data/lfw.npz'
+          use_npz: True
+        cond:
+          path: 'data/lfw.npz'
+          use_npz: True
+    image_size: 128
     channels: 3
     to_normal: True
     flip: False
   train:
-    batch_size: 8
+    batch_size: 6
     shuffle: True
   val:
-    batch_size: 8
+    batch_size: 6
     shuffle: True
   test:
-    batch_size: 8
+    batch_size: 24
     # shuffle: False
 
 model:
@@ -79,7 +100,7 @@ model:
       max_var: 1.0 # maximum variance
 
       UNetParams:
-        image_size: 64
+        image_size: 128
         in_channels: 6
         model_channels: 128
         out_channels: 3
