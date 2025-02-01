@@ -45,14 +45,12 @@ class CustomAlignedDataset(Dataset):
         else:
             image_paths_cond = get_image_paths_from_dir(path_config.cond.path)
             self.imgs_cond = ImagePathDataset(image_paths_cond, self.image_size, flip=self.flip, to_normal=self.to_normal)
-        if stage == 'test':
-            self.imgs_ori = self.imgs_cond
+        
+        if path_config.ori.use_npz:
+            self.imgs_ori = ImageNPZDataset(path_config.ori.path, self.image_size, flip=self.flip, to_normal=self.to_normal)
         else:
-            if path_config.ori.use_npz:
-                self.imgs_ori = ImageNPZDataset(path_config.ori.path, self.image_size, flip=self.flip, to_normal=self.to_normal)
-            else:
-                image_paths_ori = get_image_paths_from_dir(path_config.ori.path)
-                self.imgs_ori = ImagePathDataset(image_paths_ori, self.image_size, flip=self.flip, to_normal=self.to_normal)
+            image_paths_ori = get_image_paths_from_dir(path_config.ori.path)
+            self.imgs_ori = ImagePathDataset(image_paths_ori, self.image_size, flip=self.flip, to_normal=self.to_normal)
         
 
     def __len__(self):

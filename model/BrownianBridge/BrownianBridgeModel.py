@@ -10,7 +10,7 @@ import numpy as np
 from model.utils import extract, default
 from model.BrownianBridge.base.modules.diffusionmodules.openaimodel import UNetModel
 from model.BrownianBridge.base.modules.encoders.modules import SpatialRescaler
-
+from extra import ExtraLoss
 
 class BrownianBridgeModel(nn.Module):
     def __init__(self, model_config):
@@ -25,8 +25,10 @@ class BrownianBridgeModel(nn.Module):
         self.skip_sample = model_params.skip_sample
         self.sample_type = model_params.sample_type
         self.sample_step = model_params.sample_step
+        self.reconstruct_sample_step = model_params.reconstruct_sample_step
         self.steps = None
         self.register_schedule()
+        self.register_resconstruct_schedule()
 
         # loss and objective
         self.loss_type = model_params.loss_type
@@ -38,6 +40,8 @@ class BrownianBridgeModel(nn.Module):
         self.condition_key = model_params.UNetParams.condition_key
 
         self.denoise_fn = UNetModel(**vars(model_params.UNetParams))
+
+        self.addition_loss = ExtraLoss()
 
     def register_schedule(self):
         T = self.num_timesteps
@@ -77,6 +81,19 @@ class BrownianBridgeModel(nn.Module):
                 self.steps = torch.from_numpy(steps)
         else:
             self.steps = torch.arange(self.num_timesteps-1, -1, -1)
+            
+    def register_resconstruct_schedule(self):
+        if self.skip_sample:
+            if self.sample_type == 'linear':
+                midsteps = torch.arange(self.num_timesteps - 1, 1,
+                                        step=-((self.num_timesteps - 1) / (self.reconstruct_sample_step - 2))).long()
+                self.reconstruct_steps = torch.cat((midsteps, torch.Tensor([1, 0]).long()), dim=0)
+            elif self.sample_type == 'cosine':
+                steps = np.linspace(start=0, stop=self.num_timesteps, num=self.reconstruct_sample_step + 1)
+                steps = (np.cos(steps / self.num_timesteps * np.pi) + 1.) / 2. * self.num_timesteps
+                self.reconstruct_steps = torch.from_numpy(steps)
+        else:
+            self.reconstruct_steps = torch.arange(self.num_timesteps-1, -1, -1)
 
     def apply(self, weight_init):
         self.denoise_fn.apply(weight_init)
@@ -123,7 +140,60 @@ class BrownianBridgeModel(nn.Module):
             "loss": recloss,
             "x0_recon": x0_recon
         }
-        return recloss, log_dict
+        rec = self.p_sample_loop_reconstruct(y)
+        addition_loss = self.addition_loss.forward(rec, x0)
+        
+        return recloss, log_dict, addition_loss
+
+    def p_sample_loop_reconstruct(self, y, context=None, clip_denoised=True, sample_mid_step=False):
+        if self.condition_key == "nocond":
+            context = None
+        else:
+            context = y if context is None else context
+
+        if sample_mid_step:
+            imgs, one_step_imgs = [y], []
+            for i in range(len(self.reconstruct_steps)):
+                img, x0_recon = self.p_sample_reconstruct(x_t=imgs[-1], y=y, context=context, i=i, clip_denoised=clip_denoised)
+                imgs.append(img)
+                one_step_imgs.append(x0_recon)
+            return imgs, one_step_imgs
+        else:
+            img = y
+            for i in range(len(self.reconstruct_steps)):
+                img, _ = self.p_sample_reconstruct(x_t=img, y=y, context=context, i=i, clip_denoised=clip_denoised)
+            return img
+    
+    def p_sample_reconstruct(self, x_t, y, context, i, clip_denoised=False):
+        b, *_, device = *x_t.shape, x_t.device
+        if self.reconstruct_steps[i] == 0:
+            t = torch.full((x_t.shape[0],), self.reconstruct_steps[i], device=x_t.device, dtype=torch.long)
+            objective_recon = self.denoise_fn(x_t, timesteps=t, context=context)
+            x0_recon = self.predict_x0_from_objective(x_t, y, t, objective_recon=objective_recon)
+            if clip_denoised:
+                x0_recon.clamp_(-1., 1.)
+            return x0_recon, x0_recon
+        else:
+            t = torch.full((x_t.shape[0],), self.reconstruct_steps[i], device=x_t.device, dtype=torch.long)
+            n_t = torch.full((x_t.shape[0],), self.reconstruct_steps[i+1], device=x_t.device, dtype=torch.long)
+
+            objective_recon = self.denoise_fn(x_t, timesteps=t, context=context)
+            x0_recon = self.predict_x0_from_objective(x_t, y, t, objective_recon=objective_recon)
+            if clip_denoised:
+                x0_recon.clamp_(-1., 1.)
+
+            m_t = extract(self.m_t, t, x_t.shape)
+            m_nt = extract(self.m_t, n_t, x_t.shape)
+            var_t = extract(self.variance_t, t, x_t.shape)
+            var_nt = extract(self.variance_t, n_t, x_t.shape)
+            sigma2_t = (var_t - var_nt * (1. - m_t) ** 2 / (1. - m_nt) ** 2) * var_nt / var_t
+            sigma_t = torch.sqrt(sigma2_t) * self.eta
+
+            noise = torch.randn_like(x_t)
+            x_tminus_mean = (1. - m_nt) * x0_recon + m_nt * y + torch.sqrt((var_nt - sigma2_t) / var_t) * \
+                            (x_t - (1. - m_t) * x0_recon - m_t * y)
+
+            return x_tminus_mean + sigma_t * noise, x0_recon
 
     def q_sample(self, x0, y, t, noise=None):
         noise = default(noise, lambda: torch.randn_like(x0))

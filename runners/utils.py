@@ -61,7 +61,8 @@ def get_dataset(data_config, test=False):
     train_dataset = val_dataset = None
     if not test:
         train_dataset = Registers.datasets[data_config.dataset_type](data_config.dataset_config, stage='train')
-        val_dataset = Registers.datasets[data_config.dataset_type](data_config.dataset_config, stage='val')
+        val_dataset = train_dataset
+        # val_dataset = Registers.datasets[data_config.dataset_type](data_config.dataset_config, stage='val')
     test_dataset = Registers.datasets[data_config.dataset_type](data_config.dataset_config, stage='test')
     return train_dataset, val_dataset, test_dataset
 

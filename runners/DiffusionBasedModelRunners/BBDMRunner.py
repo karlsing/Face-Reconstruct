@@ -167,13 +167,17 @@ class BBDMRunner(DiffusionBaseRunner):
         x = x.to(self.config.training.device[0])
         x_cond = x_cond.to(self.config.training.device[0])
 
-        loss, additional_info = net.forward(x, x_cond)
+        loss, additional_info, addition_loss = net.forward(x, x_cond)
         if write and self.is_main_process:
             self.writer.add_scalar(f'loss/{stage}', loss, step)
             if additional_info.__contains__('recloss_noise'):
                 self.writer.add_scalar(f'recloss_noise/{stage}', additional_info['recloss_noise'], step)
             if additional_info.__contains__('recloss_xy'):
                 self.writer.add_scalar(f'recloss_xy/{stage}', additional_info['recloss_xy'], step)
+        # print(f"loss[{loss}], mse[{addition_loss['mse']}], vgg[{addition_loss['vgg']}]")
+        loss = loss + \
+                0.1 * addition_loss['mse'] + \
+                0.005 * addition_loss['vgg']
         return loss
 
     @torch.no_grad()

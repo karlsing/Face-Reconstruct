@@ -3,17 +3,17 @@ runner: "BBDMRunner"
 training:
   n_epochs: 200
   n_steps: 400000
-  save_interval: 20
-  sample_interval: 2
-  validation_interval: 20
-  accumulate_grad_batches: 2
+  save_interval: 1
+  sample_interval: 1
+  validation_interval: 1
+  accumulate_grad_batches: 1
 
 testing:
   clip_denoised: True
   sample_num: 4
 
 data:
-  dataset_name: 'dataset_name'
+  dataset_name: 'ffhq_celeba'
   dataset_type: 'custom_aligned'
   dataset_config:
     dataset_path: 
@@ -22,34 +22,34 @@ data:
           path: 'data/ffhq.npz'
           use_npz: True
         cond:
-          path: 'data/similar_images'
+          path: 'data/similar_celeba_ffhq'
           use_npz: False
       val: 
         ori:
           path: 'data/ffhq.npz'
           use_npz: True
         cond:
-          path: 'data/similar_images'
+          path: 'data/similar_celeba_ffhq'
           use_npz: False
       test: 
         ori:
           path: 'data/lfw.npz'
           use_npz: True
         cond:
-          path: 'data/lfw.npz'
-          use_npz: True
+          path: 'data/similar_celeba_lfw'
+          use_npz: False
     image_size: 128
     channels: 3
     to_normal: True
     flip: False
   train:
-    batch_size: 6
+    batch_size: 2
     shuffle: True
   val:
-    batch_size: 6
+    batch_size: 2
     shuffle: True
   test:
-    batch_size: 24
+    batch_size: 4
     # shuffle: False
 
 model:
@@ -87,13 +87,14 @@ model:
       min_lr: 5.e-7
 
     params:
-      mt_type: 'linear' # options {'linear', 'sin'}
+      mt_type: 'sin' # options {'linear', 'sin'}
       objective: 'grad' # options {'grad', 'noise', 'ysubx'}
-      loss_type: 'l1' # options {'l1', 'l2'}
+      loss_type: 'l2' # options {'l1', 'l2'}
 
       skip_sample: True
-      sample_type: 'linear' # options {"linear", "sin"}
+      sample_type: 'linear' # options {"linear", "cosine"}
       sample_step: 200
+      reconstruct_sample_step: 3
 
       num_timesteps: 1000 # timesteps
       eta: 1.0 # DDIM reverse process eta
