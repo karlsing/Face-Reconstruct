@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Tuple
 import os
 
 import torch.optim.lr_scheduler
@@ -162,12 +162,12 @@ class BBDMRunner(DiffusionBaseRunner):
         self.logger(self.net.cond_latent_mean)
         self.logger(self.net.cond_latent_std)
 
-    def loss_fn(self, net: BrownianBridgeModel, batch, epoch, step, opt_idx=0, stage='train', write=True):
-        (x, x_name), (x_cond, x_cond_name) = batch
+    def loss_fn(self, net: Union[BrownianBridgeModel, LatentBrownianBridgeModel], batch, epoch, step, opt_idx=0, stage='train', write=True):
+        (x, x_name), (x_cond, x_cond_name), (control) = batch # batch with (x, y, condition<for control net>)
         x = x.to(self.config.training.device[0])
         x_cond = x_cond.to(self.config.training.device[0])
-
-        loss, additional_info, addition_loss = net.forward(x, x_cond)
+        control = control.to(self.config.training.device[0])
+        loss, additional_info = net.forward(x, x_cond)
         if write and self.is_main_process:
             self.writer.add_scalar(f'loss/{stage}', loss, step)
             if additional_info.__contains__('recloss_noise'):
@@ -175,9 +175,6 @@ class BBDMRunner(DiffusionBaseRunner):
             if additional_info.__contains__('recloss_xy'):
                 self.writer.add_scalar(f'recloss_xy/{stage}', additional_info['recloss_xy'], step)
         # print(f"loss[{loss}], mse[{addition_loss['mse']}], vgg[{addition_loss['vgg']}]")
-        loss = loss + \
-                0.1 * addition_loss['mse'] + \
-                0.005 * addition_loss['vgg']
         return loss
 
     @torch.no_grad()
