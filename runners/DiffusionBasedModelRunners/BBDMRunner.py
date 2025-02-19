@@ -8,6 +8,7 @@ from PIL import Image
 from Register import Registers
 from model.BrownianBridge.BrownianBridgeModel import BrownianBridgeModel
 from model.BrownianBridge.LatentBrownianBridgeModel import LatentBrownianBridgeModel
+from model.BrownianBridge.ControlledLBBM import ControlledLatentBrownianBridgeModel
 from runners.DiffusionBasedModelRunners.DiffusionBaseRunner import DiffusionBaseRunner
 from runners.utils import weights_init, get_optimizer, get_dataset, make_dir, get_image_grid, save_single_image
 from tqdm.autonotebook import tqdm
@@ -24,6 +25,8 @@ class BBDMRunner(DiffusionBaseRunner):
             bbdmnet = BrownianBridgeModel(config.model).to(config.training.device[0])
         elif config.model.model_type == "LBBDM":
             bbdmnet = LatentBrownianBridgeModel(config.model).to(config.training.device[0])
+        elif config.model.model_type == "CBDM":
+            bbdmnet = ControlledLatentBrownianBridgeModel(config.model).to(config.training.device[0])
         else:
             raise NotImplementedError
         bbdmnet.apply(weights_init)
@@ -63,8 +66,7 @@ class BBDMRunner(DiffusionBaseRunner):
                                                                mode='min',
                                                                verbose=True,
                                                                threshold_mode='rel',
-                                                               **vars(config.model.BB.lr_scheduler)
-)
+                                                               **vars(config.model.BB.lr_scheduler))
         return [optimizer], [scheduler]
 
     @torch.no_grad()
@@ -98,7 +100,7 @@ class BBDMRunner(DiffusionBaseRunner):
         max_batch_num = 30000 // self.config.data.train.batch_size
 
         def calc_mean(batch, total_ori_mean=None, total_cond_mean=None):
-            (x, x_name), (x_cond, x_cond_name) = batch
+            (x, x_name), (x_cond, x_cond_name), control = batch
             x = x.to(self.config.training.device[0])
             x_cond = x_cond.to(self.config.training.device[0])
 
@@ -112,7 +114,7 @@ class BBDMRunner(DiffusionBaseRunner):
             return total_ori_mean, total_cond_mean
 
         def calc_var(batch, ori_latent_mean=None, cond_latent_mean=None, total_ori_var=None, total_cond_var=None):
-            (x, x_name), (x_cond, x_cond_name) = batch
+            (x, x_name), (x_cond, x_cond_name), control = batch
             x = x.to(self.config.training.device[0])
             x_cond = x_cond.to(self.config.training.device[0])
 
@@ -162,12 +164,15 @@ class BBDMRunner(DiffusionBaseRunner):
         self.logger(self.net.cond_latent_mean)
         self.logger(self.net.cond_latent_std)
 
-    def loss_fn(self, net: Union[BrownianBridgeModel, LatentBrownianBridgeModel], batch, epoch, step, opt_idx=0, stage='train', write=True):
-        (x, x_name), (x_cond, x_cond_name), (control) = batch # batch with (x, y, condition<for control net>)
+    def loss_fn(self, net: Union[ControlledLatentBrownianBridgeModel, BrownianBridgeModel, LatentBrownianBridgeModel], batch, epoch, step, opt_idx=0, stage='train', write=True):
+        (x, x_name), (x_cond, x_cond_name), control = batch # batch with (x, y, condition<for control net>)
         x = x.to(self.config.training.device[0])
         x_cond = x_cond.to(self.config.training.device[0])
         control = control.to(self.config.training.device[0])
-        loss, additional_info = net.forward(x, x_cond)
+        if isinstance(net, ControlledLatentBrownianBridgeModel):
+            loss, additional_info = net.forward(x, x_cond, condition=control)
+        else:
+            loss, additional_info = net.forward(x, x_cond)
         if write and self.is_main_process:
             self.writer.add_scalar(f'loss/{stage}', loss, step)
             if additional_info.__contains__('recloss_noise'):
@@ -178,19 +183,20 @@ class BBDMRunner(DiffusionBaseRunner):
         return loss
 
     @torch.no_grad()
-    def sample(self, net: Union[BrownianBridgeModel, LatentBrownianBridgeModel], batch, sample_path, stage='train'):
+    def sample(self, net: Union[ControlledLatentBrownianBridgeModel, BrownianBridgeModel, LatentBrownianBridgeModel], batch, sample_path, stage='train'):
         sample_path = make_dir(os.path.join(sample_path, f'{stage}_sample'))
         reverse_sample_path = make_dir(os.path.join(sample_path, 'reverse_sample'))
         reverse_one_step_path = make_dir(os.path.join(sample_path, 'reverse_one_step_samples'))
 
         print(sample_path)
 
-        (x, x_name), (x_cond, x_cond_name) = batch
+        (x, x_name), (x_cond, x_cond_name), control = batch
 
         batch_size = x.shape[0] if x.shape[0] < 4 else 4
 
         x = x[0:batch_size].to(self.config.training.device[0])
         x_cond = x_cond[0:batch_size].to(self.config.training.device[0])
+        control = control[0:batch_size].to(self.config.training.device[0])
 
         grid_size = 4
 
@@ -204,7 +210,10 @@ class BBDMRunner(DiffusionBaseRunner):
         #                  writer_tag=f'{stage}_one_step_sample' if stage != 'test' else None)
         #
         # sample = samples[-1]
-        sample = net.sample(x_cond, clip_denoised=self.config.testing.clip_denoised).to('cpu')
+        if isinstance(net, ControlledLatentBrownianBridgeModel):
+            sample = net.sample(x_cond, clip_denoised=self.config.testing.clip_denoised, control=control).to('cpu')
+        else:
+            sample = net.sample(x_cond, clip_denoised=self.config.testing.clip_denoised).to('cpu')
         image_grid = get_image_grid(sample, grid_size, to_normal=self.config.data.dataset_config.to_normal)
         im = Image.fromarray(image_grid)
         im.save(os.path.join(sample_path, 'skip_sample.png'))
@@ -224,7 +233,7 @@ class BBDMRunner(DiffusionBaseRunner):
             self.writer.add_image(f'{stage}_ground_truth', image_grid, self.global_step, dataformats='HWC')
 
     @torch.no_grad()
-    def sample_to_eval(self, net: Union[BrownianBridgeModel, LatentBrownianBridgeModel], test_loader, sample_path):
+    def sample_to_eval(self, net: Union[ControlledLatentBrownianBridgeModel, BrownianBridgeModel, LatentBrownianBridgeModel], test_loader, sample_path):
         condition_path = make_dir(os.path.join(sample_path, f'condition'))
         gt_path = make_dir(os.path.join(sample_path, 'ground_truth'))
         result_path = make_dir(os.path.join(sample_path, str(self.config.model.BB.params.sample_step)))
@@ -234,12 +243,15 @@ class BBDMRunner(DiffusionBaseRunner):
         to_normal = self.config.data.dataset_config.to_normal
         sample_num = self.config.testing.sample_num
         for test_batch in pbar:
-            (x, x_name), (x_cond, x_cond_name) = test_batch
+            (x, x_name), (x_cond, x_cond_name), control = test_batch
             x = x.to(self.config.training.device[0])
             x_cond = x_cond.to(self.config.training.device[0])
 
             for j in range(sample_num):
-                sample = net.sample(x_cond, clip_denoised=False)
+                if isinstance(net, ControlledLatentBrownianBridgeModel):
+                    sample = net.sample(x_cond, clip_denoised=False, control=control)
+                else:
+                    sample = net.sample(x_cond, clip_denoised=False)
                 # sample = net.sample_vqgan(x)
                 for i in range(batch_size):
                     condition = x_cond[i].detach().clone()
