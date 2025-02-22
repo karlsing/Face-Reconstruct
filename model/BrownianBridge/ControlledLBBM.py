@@ -13,7 +13,7 @@ class ControlledLatentBrownianBridgeModel(LatentBrownianBridgeModel):
     super().__init__(model_config)
     model_params = model_config.BB.params
     self.denoise_fn = ControlledUnetModel(**vars(model_params.UNetParams))
-    self.control_model: ControlNet = instantiate_from_config(model_params.ControlNetParams)
+    self.control_model: ControlNet = instantiate_from_config(model_config.ControlNetParams)
 
   def get_parameters(self):
     return self.control_model.parameters()
