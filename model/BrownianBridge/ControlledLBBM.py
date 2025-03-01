@@ -1,3 +1,4 @@
+from argparse import Namespace
 import torch
 import torch.nn.functional as F
 
@@ -13,10 +14,14 @@ class ControlledLatentBrownianBridgeModel(LatentBrownianBridgeModel):
     super().__init__(model_config)
     model_params = model_config.BB.params
     self.denoise_fn = ControlledUnetModel(**vars(model_params.UNetParams))
-    self.control_model: ControlNet = instantiate_from_config(model_config.ControlNetParams)
+    model_params.ControlNetParams.params = vars(model_params.ControlNetParams.params)
+    self.control_model: ControlNet = instantiate_from_config(vars(model_params.ControlNetParams))
 
   def get_parameters(self):
     return self.control_model.parameters()
+  
+  def train(self):
+    return self
     
   def forward(self, x, y, context=None, condition=None):
     with torch.no_grad():

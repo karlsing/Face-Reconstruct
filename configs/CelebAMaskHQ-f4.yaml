@@ -21,14 +21,20 @@ testing:
   sample_num: 5
 
 data:
-  dataset_name: 'CelebAMaskHQ'
-  dataset_type: 'custom_aligned'
+  dataset_name: 'FFHQSimCelebA'
+  dataset_type: 'custom_rcdm'
   dataset_config:
-    dataset_path: 'CelebAMaskHQ-Original'
-    image_size: 256
-    channels: 3
-    to_normal: True
-    flip: False
+    train:
+      ori_type: 'FFHQ'
+      ori_path: 'data/ffhq.npz'
+      facebase: 'data/similar_celeba_ffhq'
+      image_size: 256
+    test:
+      ori_type: 'LFW'
+      ori_path: 'data/lfw.npz'
+      facebase: 'data/similar_celeba_lfw'
+      image_size: 256
+
   train:
     batch_size: 16
     shuffle: True
@@ -40,16 +46,17 @@ data:
     # shuffle: False
 
 model:
-  model_name: "LBBDM-f4" # part of result path
-  model_type: "LBBDM" # specify a module
+  model_name: "CBDM-f4" # part of result path
+  model_type: "CBDM" # specify a module
   latent_before_quant_conv: False
   normalize_latent: False
   only_load_latent_mean_std: False
+  model_load_path: 'pretrained/control_CelebAMaskHQ-f4.pth'
   # model_load_path:  # model checkpoint path
   # optim_sche_load_path:  # optimizer scheduler checkpoint path
 
   EMA:
-    use_ema: True
+    use_ema: False
     ema_decay: 0.995
     update_ema_interval: 16 # step
     start_ema_step: 30000
@@ -67,7 +74,7 @@ model:
 
   VQGAN:
     params:
-      ckpt_path: 'results/VQGAN/vq-ldm-f4.ckpt'
+      ckpt_path: 'pretrained/vq-f4.ckpt'
       embed_dim: 3
       n_embed: 8192
       ddconfig:
@@ -101,13 +108,6 @@ model:
       threshold: 0.0001
       cooldown: 2000
       min_lr: 5.e-7
-
-#    lr_scheduler:
-#      factor: 0.5
-#      patience: 1500
-#      threshold: 0.0001
-#      cooldown: 500
-#      min_lr: 5.e-7
 
     params:
       mt_type: 'linear' # options {'linear', 'sin'}
@@ -145,3 +145,29 @@ model:
         use_spatial_transformer: False
         context_dim:
         condition_key: "nocond" # options {"SpatialRescaler", "first_stage", "nocond"}
+      
+      ControlNetParams:
+        target: model.cldm.cldm.ControlNet
+        params:
+          image_size: 64
+          in_channels: 3
+          model_channels: 128
+          hint_channels: 1
+          num_res_blocks: 2
+          attention_resolutions: !!python/tuple
+            - 32
+            - 16
+            - 8
+          channel_mult: !!python/tuple
+            - 1
+            - 4
+            - 8
+          conv_resample: True
+          dims: 2
+          num_heads: 8
+          num_head_channels: 64
+          use_scale_shift_norm: True
+          resblock_updown: True
+          use_spatial_transformer: False
+          context_dim:
+          condition_key: "nocond" # options {"SpatialRescaler", "first_stage", "nocond"}

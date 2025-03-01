@@ -1,17 +1,18 @@
+import os
+import cv2
 from typing import List, Tuple, Union, Literal
 from pathlib import Path
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
-
+import numpy as np
 from Register import Registers
 from datasets.base import ImagePathDataset, ImageNPZDataset
 from datasets.utils import get_image_paths_from_dir
 from datasets.rcdm import LFW, FFHQ
 from PIL import Image
-import cv2
-import os
 
+@Registers.datasets.register_with_name('custom_rcdm')
 class RCDMControlDataset(Dataset):
   '''
   dataset for RCDM.
@@ -19,22 +20,34 @@ class RCDMControlDataset(Dataset):
     handle: tuple of dataset type and path to the npz file.
     facebase: path to similar images of `handle`.
   '''
-  def __init__(self, handle: Tuple[Literal["LFW", "FFHQ"], str], facebase: str, img_size=128):
+  def __init__(self, config, stage: Literal["train", "test"]):
+    if stage == "train":
+      config = config.train
+    elif stage == "test":
+      config = config.test
+    else:
+      raise NotImplementedError("dataset only support train and test")
+    self.ori_type: Literal["LFW", "FFHQ"] = config.ori_type
+    ori_path: str = config.ori_path
+    facebase: str = config.facebase
+    img_size: int = getattr(config, "image_size", 128)
     self.transform = transforms.Compose([
       transforms.Resize((img_size, img_size)),
       transforms.ToTensor(),
       transforms.Normalize((0.5,), (0.5,))
     ])
-    hd_path = handle[1]
-    self.dataset_type = handle[0]
-    if handle[0] == "FFHQ":
-      ds = FFHQ(hd_path, self.transform)
-    elif handle[0] == "LFW":
-      ds = LFW(hd_path, self.transform)
+    if self.ori_type == "FFHQ":
+      ds = FFHQ(ori_path, self.transform)
+    elif self.ori_type == "LFW":
+      ds = LFW(ori_path, self.transform)
     else:
       raise NotImplementedError("only support LFW and FFHQ target")
     self.target = ds
-    self.base_images = get_image_paths_from_dir(facebase)
+    self.base_images = sorted(
+      get_image_paths_from_dir(facebase),
+      key= lambda x: int(x.split(".")[0].split("_")[-1])
+    )
+    
     assert len(self.target) == len(self.base_images), "source and target must have the same amount"
   
   def __getitem__(self, index):
@@ -42,8 +55,8 @@ class RCDMControlDataset(Dataset):
     base = Image.open(self.base_images[index])
     base = self.transform(base)
     return (
-      (target_img, f"{self.dataset_type}_{index:06}"), # x
-      (base, f"{self.dataset_type}_similar_{index:06}"), # x_cond
+      (target_img, f"{self.ori_type}_{index:06}"), # x
+      (base, f"{self.ori_type}_similar_{index:06}"), # x_cond
       feature) # control
   
   def __len__(self):

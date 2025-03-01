@@ -11,7 +11,6 @@ from model.utils import extract, default
 from model.BrownianBridge.base.modules.diffusionmodules.openaimodel import UNetModel
 from model.BrownianBridge.base.modules.encoders.modules import SpatialRescaler
 from model.cldm.cldm import ControlledUnetModel
-from extra import ExtraLoss
 
 class BrownianBridgeModel(nn.Module):
     def __init__(self, model_config):
@@ -26,10 +25,8 @@ class BrownianBridgeModel(nn.Module):
         self.skip_sample = model_params.skip_sample
         self.sample_type = model_params.sample_type
         self.sample_step = model_params.sample_step
-        self.reconstruct_sample_step = model_params.reconstruct_sample_step
         self.steps = None
         self.register_schedule()
-        self.register_resconstruct_schedule()
 
         # loss and objective
         self.loss_type = model_params.loss_type
@@ -81,19 +78,6 @@ class BrownianBridgeModel(nn.Module):
                 self.steps = torch.from_numpy(steps)
         else:
             self.steps = torch.arange(self.num_timesteps-1, -1, -1)
-            
-    def register_resconstruct_schedule(self):
-        if self.skip_sample:
-            if self.sample_type == 'linear':
-                midsteps = torch.arange(self.num_timesteps - 1, 1,
-                                        step=-((self.num_timesteps - 1) / (self.reconstruct_sample_step - 2))).long()
-                self.reconstruct_steps = torch.cat((midsteps, torch.Tensor([1, 0]).long()), dim=0)
-            elif self.sample_type == 'cosine':
-                steps = np.linspace(start=0, stop=self.num_timesteps, num=self.reconstruct_sample_step + 1)
-                steps = (np.cos(steps / self.num_timesteps * np.pi) + 1.) / 2. * self.num_timesteps
-                self.reconstruct_steps = torch.from_numpy(steps)
-        else:
-            self.reconstruct_steps = torch.arange(self.num_timesteps-1, -1, -1)
 
     def apply(self, weight_init):
         self.denoise_fn.apply(weight_init)

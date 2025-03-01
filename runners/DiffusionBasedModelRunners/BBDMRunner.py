@@ -164,10 +164,15 @@ class BBDMRunner(DiffusionBaseRunner):
         self.logger(self.net.cond_latent_mean)
         self.logger(self.net.cond_latent_std)
 
-    def loss_fn(self, net: Union[ControlledLatentBrownianBridgeModel, BrownianBridgeModel, LatentBrownianBridgeModel], batch, epoch, step, opt_idx=0, stage='train', write=True):
+    def loss_fn(self, 
+                net: Union[ControlledLatentBrownianBridgeModel, BrownianBridgeModel, LatentBrownianBridgeModel], 
+                batch: Tuple[Tuple[torch.Tensor, str], Tuple[torch.Tensor, str], torch.Tensor], 
+                epoch, step, opt_idx=0, stage='train', write=True):
         (x, x_name), (x_cond, x_cond_name), control = batch # batch with (x, y, condition<for control net>)
         x = x.to(self.config.training.device[0])
         x_cond = x_cond.to(self.config.training.device[0])
+        assert control.shape[-1] == 512 # Arcface feature has 512 dims
+        control = control[:, None, None].repeat((1, 1, 512, 1)) # repeat to [bs, 1, 512， 512]
         control = control.to(self.config.training.device[0])
         if isinstance(net, ControlledLatentBrownianBridgeModel):
             loss, additional_info = net.forward(x, x_cond, condition=control)

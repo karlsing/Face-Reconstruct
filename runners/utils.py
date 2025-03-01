@@ -6,6 +6,7 @@ from datetime import datetime
 from torchvision.utils import make_grid, save_image
 from Register import Registers
 from datasets.custom import CustomSingleDataset, CustomAlignedDataset, CustomInpaintingDataset
+from datasets.control import RCDMControlDataset
 
 
 def remove_file(fpath):
