@@ -2,11 +2,11 @@
 runner: "BBDMRunner"
 training:
   n_epochs: 200
-  n_steps: 400000
-  save_interval: 20
-  sample_interval: 2
-  validation_interval: 20
-  accumulate_grad_batches: 2
+  n_steps: 14000000
+  save_interval: 10
+  sample_interval: 1
+  validation_interval: 10
+  accumulate_grad_batches: 1
 
 #training:
 #  n_epochs: 100
@@ -24,6 +24,7 @@ data:
   dataset_name: 'FFHQSimCelebA'
   dataset_type: 'custom_rcdm'
   dataset_config:
+    to_normal: True
     train:
       ori_type: 'FFHQ'
       ori_path: 'data/ffhq.npz'
@@ -54,6 +55,7 @@ model:
   model_load_path: 'pretrained/control_CelebAMaskHQ-f4.pth'
   # model_load_path:  # model checkpoint path
   # optim_sche_load_path:  # optimizer scheduler checkpoint path
+  control_scale: 2.0
 
   EMA:
     use_ema: False

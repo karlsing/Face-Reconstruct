@@ -9,6 +9,8 @@ from model.cldm.cldm import ControlNet, ControlledUnetModel
 from model.utils import default, exists, extract
 from tqdm.auto import tqdm
 
+def disabled_train(self, mode = True):
+  return self
 class ControlledLatentBrownianBridgeModel(LatentBrownianBridgeModel):
   def __init__(self, model_config):
     super().__init__(model_config)
@@ -16,11 +18,18 @@ class ControlledLatentBrownianBridgeModel(LatentBrownianBridgeModel):
     self.denoise_fn = ControlledUnetModel(**vars(model_params.UNetParams))
     model_params.ControlNetParams.params = vars(model_params.ControlNetParams.params)
     self.control_model: ControlNet = instantiate_from_config(vars(model_params.ControlNetParams))
+    self.control_scale = model_config.control_scale
+    if self.cond_stage_model is not None:
+      self.cond_stage_model.train = disabled_train
+    if self.vqgan is not None:
+      self.vqgan.train = disabled_train
+    self.denoise_fn.train = disabled_train
 
   def get_parameters(self):
     return self.control_model.parameters()
   
-  def train(self):
+  # Do not weight init control model since we have zero init
+  def apply(self, weights_init):
     return self
     
   def forward(self, x, y, context=None, condition=None):
@@ -49,7 +58,7 @@ class ControlledLatentBrownianBridgeModel(LatentBrownianBridgeModel):
     objective_recon = self.denoise_fn.forward(
       x_t, timesteps=t, 
       context=context, 
-      control=control, 
+      control=[c * self.control_scale for c in control], 
       only_mid_control=False
     )
 

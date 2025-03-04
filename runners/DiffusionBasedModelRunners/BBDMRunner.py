@@ -171,8 +171,8 @@ class BBDMRunner(DiffusionBaseRunner):
         (x, x_name), (x_cond, x_cond_name), control = batch # batch with (x, y, condition<for control net>)
         x = x.to(self.config.training.device[0])
         x_cond = x_cond.to(self.config.training.device[0])
-        assert control.shape[-1] == 512 # Arcface feature has 512 dims
-        control = control[:, None, None].repeat((1, 1, 512, 1)) # repeat to [bs, 1, 512， 512]
+        assert control.shape[-1] == 512, "Arcface feature has 512 dims"
+        control = control[:, None, None].repeat((1, 1, 512, 1)) # repeat to [bs, 1, 512, 512]
         control = control.to(self.config.training.device[0])
         if isinstance(net, ControlledLatentBrownianBridgeModel):
             loss, additional_info = net.forward(x, x_cond, condition=control)
@@ -193,9 +193,12 @@ class BBDMRunner(DiffusionBaseRunner):
         reverse_sample_path = make_dir(os.path.join(sample_path, 'reverse_sample'))
         reverse_one_step_path = make_dir(os.path.join(sample_path, 'reverse_one_step_samples'))
 
-        print(sample_path)
+        print(f"logging to {sample_path}")
 
         (x, x_name), (x_cond, x_cond_name), control = batch
+        
+        assert control.shape[-1] == 512, "Arcface feature has 512 dims"
+        control = control[:, None, None].repeat((1, 1, 512, 1)) # repeat to [bs, 1, 512, 512]
 
         batch_size = x.shape[0] if x.shape[0] < 4 else 4
 
@@ -249,8 +252,11 @@ class BBDMRunner(DiffusionBaseRunner):
         sample_num = self.config.testing.sample_num
         for test_batch in pbar:
             (x, x_name), (x_cond, x_cond_name), control = test_batch
+            assert control.shape[-1] == 512, "Arcface feature has 512 dims"
+            control = control[:, None, None].repeat((1, 1, 512, 1)) # repeat to [bs, 1, 512, 512]
             x = x.to(self.config.training.device[0])
             x_cond = x_cond.to(self.config.training.device[0])
+            control = control.to(self.config.training.device[0])
 
             for j in range(sample_num):
                 if isinstance(net, ControlledLatentBrownianBridgeModel):

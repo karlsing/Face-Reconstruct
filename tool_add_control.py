@@ -48,5 +48,7 @@ for k in scratch_dict.keys():
 
 model.load_state_dict(target_dict, strict=True)
 pretrained_weights['model'] = model.state_dict()
+pretrained_weights['step'] = 0
+pretrained_weights['epoch'] = 0
 torch.save(pretrained_weights, output_path)
 print('Done.')

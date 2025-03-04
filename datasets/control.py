@@ -21,6 +21,7 @@ class RCDMControlDataset(Dataset):
     facebase: path to similar images of `handle`.
   '''
   def __init__(self, config, stage: Literal["train", "test"]):
+    print("initializing control dataset")
     if stage == "train":
       config = config.train
     elif stage == "test":
@@ -49,6 +50,7 @@ class RCDMControlDataset(Dataset):
     )
     
     assert len(self.target) == len(self.base_images), "source and target must have the same amount"
+    print(f"successfully {stage} set")
   
   def __getitem__(self, index):
     target_img, feature, label = self.target.__getitem__(index)
